@@ -17,6 +17,7 @@ import asset_management.app.picture.models
 import asset_management.app.favorite.models
 import asset_management.app.club.models
 import asset_management.app.schedule.models
+import asset_management.app.auth.models
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
