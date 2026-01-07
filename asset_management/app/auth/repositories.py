@@ -3,7 +3,7 @@ from typing import Annotated
 from sqlalchemy.orm import Session
 from fastapi import Depends
 from asset_management.database.session import get_session
-from asset_management.app.user.models import User
+from asset_management.app.user.models import User, UserClublist
 from asset_management.app.auth.models import RefreshToken
 
 
@@ -32,3 +32,6 @@ class AuthRepository:
     
     def verify_refresh_token(self, token: str) -> bool:
       return self.db_session.query(RefreshToken).filter(RefreshToken.token == token).first() is not None
+    
+    def club_permission(self, user_club_id: int, resource_club_id: int) -> UserClublist | None:
+      return self.db_session.query(UserClublist).filter(UserClublist.user_id == user_club_id, UserClublist.club_id == resource_club_id).first()
