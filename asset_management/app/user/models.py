@@ -7,6 +7,7 @@ from asset_management.database.common import Base
 if TYPE_CHECKING:
     from asset_management.app.club.models import Club
     from asset_management.app.schedule.models import Schedule
+    from asset_management.app.auth.models import RefreshToken
     from asset_management.app.favorite.models import Favorite
     from asset_management.app.picture.models import Picture
 
@@ -25,6 +26,7 @@ class User(Base):
     schedules: Mapped[List["Schedule"]] = relationship(back_populates="user")
     favorites: Mapped[List["Favorite"]] = relationship(back_populates="user")
     uploaded_pictures: Mapped[List["Picture"]] = relationship(back_populates="user")
+    refresh_tokens: Mapped[List["RefreshToken"]] = relationship(back_populates="user")
 
 
 class UserClublist(Base):
