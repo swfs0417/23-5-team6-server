@@ -86,6 +86,10 @@ class ClubMemberService:
     permission: int,
     club_id: int,
   ) -> ClubMember:
+    if self.repository.get_club_members(user_id = user_id, club_id = club_id).items:
+      raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST, detail="Already a member of the club"
+      )
     member = self.repository.create_club_member(user_id, permission, club_id)
     if member is None:
       raise HTTPException(
