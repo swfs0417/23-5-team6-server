@@ -87,4 +87,14 @@ def check_club_permission(user_club_id: int, resource_club_id: int, auth_reposit
     )
   
   return userclubinfo.permission
+
+def hash_password(password: str) -> str:
+  """Hash the password using SHA-256.
   
+  Args:
+      password (str): The plain text password.
+  
+  Returns:
+      str: The hashed password.
+  """
+  return hashlib.sha256(password.encode("utf-8")).hexdigest()

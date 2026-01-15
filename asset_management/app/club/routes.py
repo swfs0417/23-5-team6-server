@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from asset_management.app.club.models import Club
 from asset_management.app.club.schemas import ClubResponse, ClubUpdate
 from asset_management.database.session import get_session
+from asset_management.app.user.models import UserClublist
 
 router = APIRouter(prefix="/clubs", tags=["clubs"])
 
@@ -57,6 +58,9 @@ def update_club(
 )
 def delete_club(club_id: int, session: Session = Depends(get_session)):
     club = session.query(Club).filter(Club.id == club_id).first()
+    club_members = session.query(UserClublist).filter(UserClublist.club_id == club_id).all()
+    for member in club_members:
+        session.delete(member)
     if not club:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Club not found")
 
