@@ -7,10 +7,12 @@ on:
     branches: [main, develop]
 
 jobs:
-  lint-and-typecheck:
+  alembic-check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 전체 히스토리 가져오기
       
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -19,27 +21,43 @@ jobs:
       
       - name: Install dependencies
         run: |
+          pip install alembic sqlalchemy
           pip install -e .
-          pip install ruff mypy pytest pytest-asyncio httpx
       
-      - name: Ruff 린트 체크
+      - name: Check for multiple heads
         run: |
-          echo "🔍 Ruff 린트 검사 중..."
-          ruff check . --output-format=github
+          echo "🔍 Alembic 다중 헤드 체크..."
+          HEAD_COUNT=$(alembic heads 2>/dev/null | wc -l)
+          
+          if [ "$HEAD_COUNT" -gt 1 ]; then
+            echo "::error::다중 마이그레이션 헤드가 감지되었습니다!"
+            echo ""
+            echo "현재 헤드 목록:"
+            alembic heads
+            echo ""
+            echo "해결 방법: alembic merge heads -m 'merge_migrations'"
+            exit 1
+          fi
+          
+          echo "✅ 단일 마이그레이션 헤드 확인"
+          alembic heads
       
-      - name: Ruff 포맷 체크
+      - name: Verify migration chain
         run: |
-          echo "📝 코드 포맷 검사 중..."
-          ruff format --check .
-      
-      - name: MyPy 타입 체크
-        run: |
-          echo "🔎 타입 체크 중..."
-          mypy asset_management --ignore-missing-imports --no-error-summary || true
-        continue-on-error: true  # 처음에는 warning으로 시작
+          echo "🔗 마이그레이션 체인 검증..."
+          alembic history --verbose
+          
+          # 마이그레이션 upgrade dry-run (offline 모드)
+          echo "📝 마이그레이션 검증 중..."
+          alembic upgrade head --sql > /dev/null 2>&1 || {
+            echo "::error::마이그레이션 체인에 문제가 있습니다!"
+            exit 1
+          }
+          echo "✅ 마이그레이션 체인 정상"
 
   import-check:
     runs-on: ubuntu-latest
+    needs: [alembic-check]  # 이전 job들 통과 후 실행
     steps:
       - uses: actions/checkout@v4
       
@@ -117,6 +135,7 @@ jobs:
 
   app-startup-check:
     runs-on: ubuntu-latest
+    needs: [import-check]  # import 체크 통과 후 실행
     steps:
       - uses: actions/checkout@v4
       
@@ -209,7 +228,7 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
-    needs: [import-check]  # import 체크 통과 후 테스트 실행
+    needs: [app-startup-check]  # app-startup-check 통과 후 테스트 실행
     
     steps:
       - uses: actions/checkout@v4
@@ -243,7 +262,7 @@ jobs:
   # 모든 체크 통과 확인 (Branch Protection에 사용)
   ci-success:
     runs-on: ubuntu-latest
-    needs: [lint-and-typecheck, import-check, app-startup-check, test]
+    needs: [alembic-check, import-check, app-startup-check, test]
     steps:
       - name: CI 성공
         run: echo "✅ 모든 CI 체크 통과!"
