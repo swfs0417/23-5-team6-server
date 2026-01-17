@@ -1,0 +1,223 @@
+name: FastAPI CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  lint-and-typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Install dependencies
+        run: |
+          pip install -e .
+          pip install ruff mypy pytest pytest-asyncio httpx
+      
+      - name: Ruff 린트 체크
+        run: |
+          echo "🔍 Ruff 린트 검사 중..."
+          ruff check . --output-format=github
+      
+      - name: Ruff 포맷 체크
+        run: |
+          echo "📝 코드 포맷 검사 중..."
+          ruff format --check .
+      
+      - name: MyPy 타입 체크
+        run: |
+          echo "🔎 타입 체크 중..."
+          mypy asset_management --ignore-missing-imports --no-error-summary || true
+        continue-on-error: true  # 처음에는 warning으로 시작
+
+  import-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Install dependencies
+        run: pip install -e .
+      
+      - name: 모든 모듈 Import 검증
+        run: |
+          echo "📦 모든 Python 모듈 import 테스트..."
+          python -c "
+          import sys
+          import importlib
+          import pkgutil
+          
+          errors = []
+          
+          # 메인 패키지 import
+          try:
+              import asset_management
+              print('✅ asset_management 패키지 import 성공')
+          except Exception as e:
+              errors.append(f'asset_management: {e}')
+              print(f'❌ asset_management: {e}')
+          
+          # 모든 서브모듈 import
+          modules = [
+              'asset_management.main',
+              'asset_management.app.user.routes',
+              'asset_management.app.user.models',
+              'asset_management.app.auth.router',
+              'asset_management.app.auth.models',
+              'asset_management.app.auth.services',
+              'asset_management.app.club.routes',
+              'asset_management.app.club.models',
+              'asset_management.app.assets.router',
+              'asset_management.app.assets.models',
+              'asset_management.app.assets.services',
+              'asset_management.app.schedule.router',
+              'asset_management.app.schedule.models',
+              'asset_management.app.schedule.services',
+              'asset_management.app.club_member.router',
+              'asset_management.app.admin.routes',
+              'asset_management.app.category.models',
+              'asset_management.database.session',
+          ]
+          
+          for module in modules:
+              try:
+                  importlib.import_module(module)
+                  print(f'✅ {module}')
+              except Exception as e:
+                  errors.append(f'{module}: {e}')
+                  print(f'❌ {module}: {e}')
+          
+          if errors:
+              print(f'\n❌ {len(errors)}개 모듈에서 import 에러 발생!')
+              sys.exit(1)
+          else:
+              print(f'\n✅ 모든 모듈 import 성공!')
+          "
+
+  app-startup-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Install dependencies
+        run: pip install -e .
+      
+      - name: FastAPI 앱 시작 테스트
+        env:
+          # 테스트용 환경 변수 (실제 DB 연결 없이)
+          DATABASE_URL: "sqlite+aiosqlite:///:memory:"
+          SECRET_KEY: "test-secret-key-for-ci"
+          GOOGLE_CLIENT_ID: "test-client-id"
+          GOOGLE_CLIENT_SECRET: "test-client-secret"
+        run: |
+          echo "🚀 FastAPI 앱 시작 검증..."
+          python -c "
+          import sys
+          try:
+              from asset_management.main import app
+              
+              # FastAPI 앱 객체 검증
+              assert app is not None, 'app이 None입니다'
+              assert hasattr(app, 'routes'), 'routes 속성이 없습니다'
+              
+              # 라우터 등록 확인
+              route_paths = [route.path for route in app.routes]
+              print(f'등록된 라우트 수: {len(route_paths)}')
+              
+              # 필수 엔드포인트 확인
+              required_endpoints = ['/health', '/api']
+              for endpoint in required_endpoints:
+                  if any(endpoint in path for path in route_paths):
+                      print(f'✅ {endpoint} 엔드포인트 확인')
+                  else:
+                      print(f'⚠️ {endpoint} 엔드포인트 미확인')
+              
+              print('✅ FastAPI 앱 로드 성공!')
+          except Exception as e:
+              print(f'❌ FastAPI 앱 로드 실패: {e}')
+              import traceback
+              traceback.print_exc()
+              sys.exit(1)
+          "
+      
+      - name: OpenAPI 스키마 생성 테스트
+        env:
+          DATABASE_URL: "sqlite+aiosqlite:///:memory:"
+          SECRET_KEY: "test-secret-key-for-ci"
+          GOOGLE_CLIENT_ID: "test-client-id"
+          GOOGLE_CLIENT_SECRET: "test-client-secret"
+        run: |
+          echo "📄 OpenAPI 스키마 생성 테스트..."
+          python -c "
+          from asset_management.main import app
+          schema = app.openapi()
+          assert 'paths' in schema, 'OpenAPI 스키마에 paths가 없습니다'
+          assert 'info' in schema, 'OpenAPI 스키마에 info가 없습니다'
+          print(f'✅ OpenAPI 스키마 생성 성공 ({len(schema[\"paths\"])} 엔드포인트)')
+          "
+
+  test:
+    runs-on: ubuntu-latest
+    needs: [import-check]  # import 체크 통과 후 테스트 실행
+    
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: test_password
+          MYSQL_DATABASE: test_db
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Install dependencies
+        run: |
+          pip install -e .
+          pip install pytest pytest-asyncio httpx aiosqlite
+      
+      - name: 테스트 실행
+        env:
+          DATABASE_URL: "mysql+aiomysql://root:test_password@localhost:3306/test_db"
+          SECRET_KEY: "test-secret-key"
+          GOOGLE_CLIENT_ID: "test-client-id"
+          GOOGLE_CLIENT_SECRET: "test-client-secret"
+        run: |
+          echo "🧪 pytest 실행..."
+          pytest tests/ -v --tb=short
+
+  # 모든 체크 통과 확인 (Branch Protection에 사용)
+  ci-success:
+    runs-on: ubuntu-latest
+    needs: [lint-and-typecheck, import-check, app-startup-check, test]
+    steps:
+      - name: CI 성공
+        run: echo "✅ 모든 CI 체크 통과!"

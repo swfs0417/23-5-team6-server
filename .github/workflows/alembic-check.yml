@@ -1,0 +1,57 @@
+name: Alembic Migration Check
+
+on:
+  pull_request:
+    paths:
+      - 'asset_management/database/alembic/versions/**'
+      - 'asset_management/**/models.py'
+
+jobs:
+  check-migrations:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 전체 히스토리 가져오기
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          pip install alembic sqlalchemy
+          pip install -e .
+      
+      - name: Check for multiple heads
+        run: |
+          echo "🔍 Alembic 다중 헤드 체크..."
+          HEAD_COUNT=$(alembic heads 2>/dev/null | wc -l)
+          
+          if [ "$HEAD_COUNT" -gt 1 ]; then
+            echo "::error::다중 마이그레이션 헤드가 감지되었습니다!"
+            echo ""
+            echo "현재 헤드 목록:"
+            alembic heads
+            echo ""
+            echo "해결 방법: alembic merge heads -m 'merge_migrations'"
+            exit 1
+          fi
+          
+          echo "✅ 단일 마이그레이션 헤드 확인"
+          alembic heads
+      
+      - name: Verify migration chain
+        run: |
+          echo "🔗 마이그레이션 체인 검증..."
+          alembic history --verbose
+          
+          # 마이그레이션 upgrade dry-run (offline 모드)
+          echo "📝 마이그레이션 검증 중..."
+          alembic upgrade head --sql > /dev/null 2>&1 || {
+            echo "::error::마이그레이션 체인에 문제가 있습니다!"
+            exit 1
+          }
+          echo "✅ 마이그레이션 체인 정상"
