@@ -13,7 +13,8 @@ class AssetRepository:
 
     def create_asset(self, asset: Asset) -> Asset:
         self.session.add(asset)
-        self.session.flush()
+        self.session.commit()
+        self.session.refresh(asset)
         return asset
     
     def get_asset_by_id(self, asset_id: int) -> Asset | None:
@@ -28,10 +29,11 @@ class AssetRepository:
         for key, value in kwargs.items():
             if value is not None:
                 setattr(asset, key, value)
-        self.session.flush()
+        self.session.commit()
+        self.session.refresh(asset)
 
         return asset
 
     def delete_asset(self, asset: Asset) -> None:
         self.session.delete(asset)
-        self.session.flush()
+        self.session.commit()
