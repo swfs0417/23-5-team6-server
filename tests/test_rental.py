@@ -119,7 +119,7 @@ def test_borrow_item_success(client, user_token, test_asset, user_in_club):
     assert data["user_id"] == user_in_club["id"]
     assert data["status"] == "borrowed"
     assert "id" in data
-    assert data["id"].startswith("rental-")
+    assert isinstance(data["id"], int)
     assert data["expected_return_date"] == tomorrow.isoformat()
     assert data["returned_at"] is None
 
@@ -229,7 +229,7 @@ def test_return_item_success(client, user_token, test_asset, user_in_club):
 def test_return_nonexistent_rental(client, user_token):
     """Test returning non-existent rental"""
     response = client.post(
-        "/api/rentals/rental-999/return",
+        "/api/rentals/99999/return",
         headers={"Authorization": f"Bearer {user_token}"},
     )
     
@@ -244,7 +244,8 @@ def test_return_invalid_rental_id(client, user_token):
         headers={"Authorization": f"Bearer {user_token}"},
     )
     
-    assert response.status_code == 404
+    # 정수형이 아닌 값은 422 Validation Error 발생
+    assert response.status_code == 422
 
 
 def test_return_other_users_rental(client, user_token, test_asset, user_in_club, admin_token, admin_club):
