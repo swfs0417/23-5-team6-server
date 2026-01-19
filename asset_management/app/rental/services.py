@@ -31,7 +31,7 @@ class RentalService:
         }
         
         return RentalResponse(
-            id=f"rental-{schedule.id:03d}",
+            id=schedule.id,
             item_id=schedule.asset_id,
             user_id=schedule.user_id,
             status=status_map.get(schedule.status, "borrowed"),
@@ -86,7 +86,7 @@ class RentalService:
 
         return self._schedule_to_rental(schedule)
 
-    def return_item(self, rental_id: str, user_id: str) -> RentalResponse:
+    def return_item(self, rental_id: int, user_id: str) -> RentalResponse:
         """물품 반납"""
 
         schedule = self.db_session.query(Schedule).filter(Schedule.id == rental_id).first()

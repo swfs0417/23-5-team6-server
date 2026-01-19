@@ -41,7 +41,7 @@ def borrow_item(
 
 @router.post("/{rental_id}/return", status_code=status.HTTP_200_OK)
 def return_item(
-    rental_id: str,
+    rental_id: int,
     rental_service: Annotated[RentalService, Depends()],
     user_id: str = Depends(login_with_header),
 ) -> RentalResponse:

@@ -11,7 +11,7 @@ class RentalBorrowRequest(BaseModel):
 
 class RentalResponse(BaseModel):
     """물품 대여 응답"""
-    id: str  # rental-001 형식
+    id: int  # schedule id
     item_id: int
     user_id: str
     status: str  # borrowed, returned, overdue
